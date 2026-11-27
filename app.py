@@ -8,8 +8,8 @@ import re
 import imageio_ffmpeg
 
 st.set_page_config(page_title="4K CC TikTok Editor", page_icon="🎬")
-st.title("🎬 TikTok 4K CC Auto-Editor")
-st.write("TikTok video ka link paste karein — automatic 4K CC & High-Sharpen edit hokar download ke liye tayyar ho jayegi.")
+st.title("🎬 TikTok 4K HDR CC Auto-Editor")
+st.write("TikTok video ka link paste karein — exact 4K CC, HDR Clarity, Glow aur High-Sharpen edit hokar download ke liye tayyar ho jayegi.")
 
 if "video_bytes" not in st.session_state:
     st.session_state.video_bytes = None
@@ -18,18 +18,11 @@ if "video_filename" not in st.session_state:
 
 raw_input = st.text_input("TikTok Video Link yahan paste karein:")
 
-# Fixed 4K CC & New Sharpen Preset Values (Locked)
-SHARPEN_STRENGTH = 2.2
-SATURATION = 1.38
-CONTRAST = 1.18
-BRIGHTNESS = 0.02
-
 def extract_url(text):
     match = re.search(r'(https?://[^\s]+)', text)
     return match.group(1) if match else None
 
 def download_tiktok_video(url, output_path):
-    # Method 1: TikWM API (Bina watermark HD video ke liye sabse reliable)
     try:
         api_url = "https://www.tikwm.com/api/"
         resp = requests.post(api_url, data={"url": url, "hd": 1}, timeout=20).json()
@@ -46,7 +39,6 @@ def download_tiktok_video(url, output_path):
     except Exception:
         pass
 
-    # Method 2: yt-dlp fallback
     try:
         ydl_opts = {
             'outtmpl': output_path,
@@ -86,19 +78,31 @@ if st.button("Edit & Prepare Download"):
                     st.error("TikTok video download nahi ho saki. Link check karein ya public video ka link dein.")
                     st.stop()
 
-            with st.spinner("2/2: 4K CC & High-Sharpen preset apply ho raha hai (thoda intezar karein)..."):
-                vf_filter = (
-                    f"unsharp=5:5:{SHARPEN_STRENGTH}:5:5:0.0,"
-                    f"eq=contrast={CONTRAST}:saturation={SATURATION}:brightness={BRIGHTNESS},"
-                    f"scale=trunc(iw*1.5/2)*2:trunc(ih*1.5/2)*2:flags=lanczos"
+            with st.spinner("2/2: Heavy 4K HDR CC + Glow + New Sharpen apply ho raha hai..."):
+                # Exact Nova Editor / Alight Motion style 4K CC Filtergraph:
+                # 1. Lanczos 1080p/2K upscale for crisp edges
+                # 2. HDR Curve (shadows lift + highlights punch)
+                # 3. Contrast Adaptive Sharpening (CAS) + Heavy Unsharp (New Sharpen look)
+                # 4. Rich Color Grading + Soft 4K Highlight Glow (Screen blend)
+                filter_complex = (
+                    "[0:v]scale=trunc(iw*1.5/2)*2:trunc(ih*1.5/2)*2:flags=lanczos,"
+                    "curves=all='0/0.03 0.22/0.27 0.5/0.55 0.78/0.84 1/1',"
+                    "cas=strength=0.85,"
+                    "unsharp=7:7:2.6:7:7:0.4,"
+                    "eq=contrast=1.22:saturation=1.42:brightness=0.03:gamma=1.06,"
+                    "colorbalance=rs=0.04:gs=0.01:bs=-0.03:rh=0.05:gh=0.02:bh=-0.02,"
+                    "split=2[sharp][blur];"
+                    "[blur]gblur=sigma=12,eq=brightness=0.05:contrast=1.1[glow];"
+                    "[sharp][glow]blend=all_mode=screen:all_opacity=0.22[out]"
                 )
                 
                 cmd = [
                     ffmpeg_exe, "-y", "-i", raw_video,
-                    "-vf", vf_filter,
+                    "-filter_complex", filter_complex,
+                    "-map", "[out]", "-map", "0:a?",
                     "-r", "60",
                     "-c:v", "libx264", "-pix_fmt", "yuv420p",
-                    "-crf", "18", "-preset", "fast",
+                    "-crf", "17", "-preset", "fast",
                     "-movflags", "+faststart",
                     "-c:a", "aac", "-b:a", "192k",
                     edited_video
@@ -111,7 +115,7 @@ if st.button("Edit & Prepare Download"):
             if os.path.exists(edited_video) and os.path.getsize(edited_video) > 50000:
                 with open(edited_video, "rb") as f:
                     st.session_state.video_bytes = f.read()
-                st.session_state.video_filename = f"4K_CC_{job_id}.mp4"
+                st.session_state.video_filename = f"4K_HDR_CC_{job_id}.mp4"
             else:
                 st.error("Edited video empty bani hai, dobara koshish karein.")
 
@@ -124,7 +128,7 @@ if st.button("Edit & Prepare Download"):
                 os.remove(edited_video)
 
 if st.session_state.video_bytes is not None:
-    st.success("Video 4K CC mein edit ho gayi hai!")
+    st.success("Video full 4K HDR CC mein edit ho gayi hai!")
     st.video(st.session_state.video_bytes)
     st.download_button(
         label="⬇️ Download 4K CC Video",
